@@ -6,7 +6,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-
+#include <unistd.h>
+/* #include <limits.h> */
+#include <float.h>
 
 #define BUFFERSIZE 1024
 
@@ -27,7 +29,16 @@ int main(int argc, char **argv)
 
   if ((Sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
   {
-    perror("socket creation failed");
+    perror("Failed to create socket");
+    exit(EXIT_FAILURE);
+  }
+
+  struct timeval tval;
+  tval.tv_sec = 5;
+
+  if (setsockopt(Sockfd, SOL_SOCKET, SO_RCVTIMEO, &tval, sizeof(tval)) < 0)
+  {
+    perror("Failed to set socket timeout");
     exit(EXIT_FAILURE);
   }
 
@@ -38,24 +49,85 @@ int main(int argc, char **argv)
   ServAddr.sin_addr.s_addr = inet_addr(argv[1]);
 
   srand(time(NULL));
-  int i;
 
+  struct timespec InitialTimeSpec, FinalTimeSpec;
+  long InitialUS, FinalUS;
+  time_t InitialS, FinalS;
+  long InitialTime, FinalTime;
+  double TimeDiff;
+  socklen_t len;
+
+  int PacketsReceived = 0;
+  double MaxRTT = 0.0;
+  double MinRTT = DBL_MAX;
+  double AvgRTT = 0.0;
+
+  int i;
   for (i = 0; i < 10; ++i)
   {
     memset(OutBuffer, 0, BUFFERSIZE);
     memset(InBuffer, 0, BUFFERSIZE);
 
-    sprintf(OutBuffer, "PING %d %d", i+1, );
+    // Populate initial timepsec
+    clock_gettime(CLOCK_REALTIME, &InitialTimeSpec);
+
+    // Calculate initial time from timespec in microseconds
+    InitialS = InitialTimeSpec.tv_sec;
+    InitialUS = InitialTimeSpec.tv_nsec / 1000;
+    InitialTime = (InitialS * 1000000) + (InitialUS);
+
+    snprintf(OutBuffer, BUFFERSIZE, "PING %d %ld%ld", i+1, (long)InitialS, InitialUS);
 
     sendto(
-        Sockfd,
-        (const char *)OutBuffer,
-        strlen(OutBuffer) + 1,
-        0,
-        (const struct sockaddr *) &ServAddr,
-        sizeof(ServAddr));
+           Sockfd,
+           (const char *)OutBuffer,
+           strlen(OutBuffer) + 1,
+           0,
+           (const struct sockaddr *) &ServAddr,
+           sizeof(ServAddr));
+
+    recvfrom(
+             Sockfd,
+             (char *)InBuffer,
+             BUFFERSIZE,
+             MSG_WAITALL,
+             (struct sockaddr *)& ServAddr,
+             &len);
+
+    // Populate final timespec
+    clock_gettime(CLOCK_REALTIME, &FinalTimeSpec);
+
+    // Calculate final time from timespec in microseconds
+    FinalS = FinalTimeSpec.tv_sec;
+    FinalUS = FinalTimeSpec.tv_nsec / 1000;
+    FinalTime = (FinalS * 1000000) + (FinalUS);
+
+    // Get time difference
+    TimeDiff = (FinalTime - InitialTime) / 1000.0;
+
+    if (!strncmp(InBuffer, OutBuffer, BUFFERSIZE))
+    {
+      PacketsReceived++;
+
+      AvgRTT += TimeDiff;
+
+      if (TimeDiff > MaxRTT)
+      {
+        MaxRTT = TimeDiff;
+      }
+
+      if (TimeDiff < MinRTT)
+      {
+        MinRTT = TimeDiff;
+      }
+
+      printf("PING received from %s: seq#=%d time=%.3lf ms\n", argv[1], i + 1, TimeDiff);
+    }
   }
 
+  AvgRTT /= 10;
+
+  printf("--- ping statistics --- 10 packets transmitted, %d packets received, %.2f%% packet loss rtt min/avg/max = %.3lf %.3lf %.3lf ms\n", PacketsReceived, ((10 - PacketsReceived) / 10.0) * 100, MinRTT, AvgRTT, MaxRTT);
 
 
 }
