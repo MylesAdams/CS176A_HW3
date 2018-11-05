@@ -34,7 +34,7 @@ int main(int argc, char **argv)
   }
 
   struct timeval tval;
-  tval.tv_sec = 5;
+  tval.tv_sec = 1;
 
   if (setsockopt(Sockfd, SOL_SOCKET, SO_RCVTIMEO, &tval, sizeof(tval)) < 0)
   {
@@ -86,46 +86,50 @@ int main(int argc, char **argv)
            (const struct sockaddr *) &ServAddr,
            sizeof(ServAddr));
 
-    recvfrom(
+    if (recvfrom(
              Sockfd,
              (char *)InBuffer,
              BUFFERSIZE,
              MSG_WAITALL,
              (struct sockaddr *)& ServAddr,
-             &len);
-
-    // Populate final timespec
-    clock_gettime(CLOCK_REALTIME, &FinalTimeSpec);
-
-    // Calculate final time from timespec in microseconds
-    FinalS = FinalTimeSpec.tv_sec;
-    FinalUS = FinalTimeSpec.tv_nsec / 1000;
-    FinalTime = (FinalS * 1000000) + (FinalUS);
-
-    // Get time difference
-    TimeDiff = (FinalTime - InitialTime) / 1000.0;
-
-    if (!strncmp(InBuffer, OutBuffer, BUFFERSIZE))
+             &len) > 0)
     {
-      PacketsReceived++;
+      // Populate final timespec
+      clock_gettime(CLOCK_REALTIME, &FinalTimeSpec);
 
-      AvgRTT += TimeDiff;
+      // Calculate final time from timespec in microseconds
+      FinalS = FinalTimeSpec.tv_sec;
+      FinalUS = FinalTimeSpec.tv_nsec / 1000;
+      FinalTime = (FinalS * 1000000) + (FinalUS);
 
-      if (TimeDiff > MaxRTT)
+      // Get time difference
+      TimeDiff = (FinalTime - InitialTime) / 1000.0;
+
+      if (!strncmp(InBuffer, OutBuffer, BUFFERSIZE))
       {
-        MaxRTT = TimeDiff;
-      }
+        PacketsReceived++;
 
-      if (TimeDiff < MinRTT)
-      {
-        MinRTT = TimeDiff;
-      }
+        AvgRTT += TimeDiff;
 
-      printf("PING received from %s: seq#=%d time=%.3lf ms\n", argv[1], i + 1, TimeDiff);
+        if (TimeDiff > MaxRTT)
+        {
+          MaxRTT = TimeDiff;
+        }
+
+        if (TimeDiff < MinRTT)
+        {
+          MinRTT = TimeDiff;
+        }
+
+        printf("PING received from %s: seq#=%d time=%.3lf ms\n", argv[1], i + 1, TimeDiff);
+
+      }
+      usleep((useconds_t)(1000000 - (TimeDiff * 1000)));
     }
+
   }
 
-  AvgRTT /= 10;
+  AvgRTT /= PacketsReceived;
 
   printf("--- ping statistics --- 10 packets transmitted, %d packets received, %.2f%% packet loss rtt min/avg/max = %.3lf %.3lf %.3lf ms\n", PacketsReceived, ((10 - PacketsReceived) / 10.0) * 100, MinRTT, AvgRTT, MaxRTT);
 
