@@ -7,7 +7,6 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-/* #include <limits.h> */
 #include <float.h>
 
 #define BUFFERSIZE 1024
@@ -78,6 +77,7 @@ int main(int argc, char **argv)
 
     snprintf(OutBuffer, BUFFERSIZE, "PING %d %ld%ld", i+1, (long)InitialS, InitialUS);
 
+    // Send PING to server
     sendto(
            Sockfd,
            (const char *)OutBuffer,
@@ -86,6 +86,7 @@ int main(int argc, char **argv)
            (const struct sockaddr *) &ServAddr,
            sizeof(ServAddr));
 
+    // Recv from server, only calculate RTT statistics if successful
     if (recvfrom(
              Sockfd,
              (char *)InBuffer,
@@ -105,6 +106,8 @@ int main(int argc, char **argv)
       // Get time difference
       TimeDiff = (FinalTime - InitialTime) / 1000.0;
 
+      // If incoming message matches prior outgoing message
+      // Increase number of packets received and calculate stats regarding RTT
       if (!strncmp(InBuffer, OutBuffer, BUFFERSIZE))
       {
         PacketsReceived++;
@@ -124,6 +127,8 @@ int main(int argc, char **argv)
         printf("PING received from %s: seq#=%d time=%.3lf ms\n", argv[1], i + 1, TimeDiff);
 
       }
+      // Sleep the rest of the second, so that each PING is sent about 1 second
+      // apart, like the assignment said.
       usleep((useconds_t)(1000000 - (TimeDiff * 1000)));
     }
 
@@ -131,6 +136,7 @@ int main(int argc, char **argv)
 
   AvgRTT /= PacketsReceived;
 
+  // Print out statistics
   printf("--- ping statistics --- 10 packets transmitted, %d packets received, %.2f%% packet loss rtt min/avg/max = %.3lf %.3lf %.3lf ms\n", PacketsReceived, ((10 - PacketsReceived) / 10.0) * 100, MinRTT, AvgRTT, MaxRTT);
 
 
