@@ -34,6 +34,7 @@ int main(int argc, char **argv)
 
   struct timeval tval;
   tval.tv_sec = 1;
+  tval.tv_usec = 0;
 
   if (setsockopt(Sockfd, SOL_SOCKET, SO_RCVTIMEO, &tval, sizeof(tval)) < 0)
   {
